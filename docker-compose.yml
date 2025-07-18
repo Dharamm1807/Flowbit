@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  # API Server
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: ticketing-api
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+      - PORT=8000
+      - MONGODB_URI=mongodb+srv://dharampratapvirdi:nqzHxPQ6OSEzn5xE@cluster0.ny8o1ov.mongodb.net/ticketing
+      - JWT_SECRET=Adsbdsbvdnvbbvdjjddjjd
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/ticket-created
+    networks:
+      - ticketing-network
+    volumes:
+      - ./api:/app
+    command: npm start
+
+  # Shell Frontend (Host)
+  shell:
+    build:
+      context: ./shell
+      dockerfile: Dockerfile
+    container_name: ticketing-shell
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_TICKETS_MF_URL=http://localhost:3001
+    depends_on:
+      - api
+    networks:
+      - ticketing-network
+    volumes:
+      - ./shell:/app
+    command: npx webpack serve --config webpack.config.js --host 0.0.0.0
+
+  # Tickets Microfrontend (Remote)
+  tickets:
+    build:
+      context: ./tickets
+      dockerfile: Dockerfile
+    container_name: ticketing-tickets
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    networks:
+      - ticketing-network
+    volumes:
+      - ./tickets:/app
+    command: npx webpack serve --config webpack.config.js --host 0.0.0.0
+
+  # n8n Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: ticketing-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - DB_TYPE=sqlite
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=1234567890
+      - WEBHOOK_URL=http://localhost:5678
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - ticketing-network
+
+networks:
+  ticketing-network:
+    driver: bridge
+
+volumes:
+  n8n_data:
